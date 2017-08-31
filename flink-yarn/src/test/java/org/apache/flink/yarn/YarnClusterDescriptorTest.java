@@ -22,6 +22,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.IllegalConfigurationException;
 import org.apache.flink.yarn.cli.FlinkYarnSessionCli;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.junit.Before;
@@ -102,6 +104,23 @@ public class YarnClusterDescriptorTest {
 				throw e;
 			}
 		}
+	}
+
+	@Test
+	public void testCustomShipPath() throws IOException {
+
+		Configuration flinkConf = new Configuration();
+
+		YarnClusterDescriptor clusterDescriptor = new YarnClusterDescriptor();
+		clusterDescriptor.setFlinkConfiguration(flinkConf);
+
+		FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+		assertEquals(fs.getHomeDirectory(), clusterDescriptor.getResourceShipPath(fs));
+
+		flinkConf.setString(ConfigConstants.YARN_RESOURCE_SHIP_PATH, "/tmp");
+		clusterDescriptor.setFlinkConfiguration(flinkConf);
+
+		assertEquals(new Path("/tmp"), clusterDescriptor.getResourceShipPath(fs));
 	}
 
 	@Test

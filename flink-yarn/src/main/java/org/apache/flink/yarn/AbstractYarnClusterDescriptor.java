@@ -285,6 +285,11 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		return true;
 	}
 
+	public Path getResourceShipPath(FileSystem fs) {
+		String shipFileDir = flinkConfiguration.getString(ConfigConstants.YARN_RESOURCE_SHIP_PATH, null);
+		return shipFileDir != null ? new Path(shipFileDir) : fs.getHomeDirectory();
+	}
+
 	/**
 	 * Sets the user jar which is included in the system classloader of all nodes.
 	 */
@@ -680,12 +685,15 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		// ship list that enables reuse of resources for task manager containers
 		StringBuilder envShipFileList = new StringBuilder();
 
+		Path shipFilePath = getResourceShipPath(fs);
+		LOG.info("Using " + shipFilePath + " as the base directory for sharing resources on the YARN cluster.");
+
 		// upload and register ship files	
-		List<String> systemClassPaths = uploadAndRegisterFiles(systemShipFiles, fs, appId.toString(), paths, localResources, envShipFileList);
+		List<String> systemClassPaths = uploadAndRegisterFiles(systemShipFiles, fs, appId.toString(), shipFilePath, paths, localResources, envShipFileList);
 
 		List<String> userClassPaths;
 		if (userJarInclusion != YarnConfigOptions.UserJarInclusion.DISABLED) {
-			userClassPaths = uploadAndRegisterFiles(userJarFiles, fs, appId.toString(), paths, localResources, envShipFileList);
+			userClassPaths = uploadAndRegisterFiles(userJarFiles, fs, appId.toString(), shipFilePath, paths, localResources, envShipFileList);
 		} else {
 			userClassPaths = Collections.emptyList();
 		}
@@ -718,9 +726,9 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		LocalResource appMasterJar = Records.newRecord(LocalResource.class);
 		LocalResource flinkConf = Records.newRecord(LocalResource.class);
 		Path remotePathJar =
-			Utils.setupLocalResource(fs, appId.toString(), flinkJarPath, appMasterJar, fs.getHomeDirectory());
+			Utils.setupLocalResource(fs, appId.toString(), flinkJarPath, appMasterJar, shipFilePath);
 		Path remotePathConf =
-			Utils.setupLocalResource(fs, appId.toString(), flinkConfigurationPath, flinkConf, fs.getHomeDirectory());
+			Utils.setupLocalResource(fs, appId.toString(), flinkConfigurationPath, flinkConf, shipFilePath);
 		localResources.put("flink.jar", appMasterJar);
 		localResources.put("flink-conf.yaml", flinkConf);
 
@@ -741,7 +749,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 				}
 				LocalResource jobgraph = Records.newRecord(LocalResource.class);
 				Path remoteJobGraph =
-						Utils.setupLocalResource(fs, appId.toString(), new Path(fp.toURI()), jobgraph, fs.getHomeDirectory());
+						Utils.setupLocalResource(fs, appId.toString(), new Path(fp.toURI()), jobgraph, shipFilePath);
 				localResources.put("job.graph", jobgraph);
 				paths.add(remoteJobGraph);
 				classPathBuilder.append("job.graph").append(File.pathSeparator);
@@ -751,7 +759,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 			}
 		}
 
-		Path yarnFilesDir = new Path(fs.getHomeDirectory(), ".flink/" + appId + '/');
+		Path yarnFilesDir = new Path(shipFilePath, ".flink/" + appId + '/');
 
 		FsPermission permission = new FsPermission(FsAction.ALL, FsAction.NONE, FsAction.NONE);
 		fs.setPermission(yarnFilesDir, permission); // set permission for path.
@@ -770,14 +778,14 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 				LOG.info("Adding KRB5 configuration {} to the AM container local resource bucket", krb5.getAbsolutePath());
 				LocalResource krb5ConfResource = Records.newRecord(LocalResource.class);
 				Path krb5ConfPath = new Path(krb5.getAbsolutePath());
-				remoteKrb5Path = Utils.setupLocalResource(fs, appId.toString(), krb5ConfPath, krb5ConfResource, fs.getHomeDirectory());
+				remoteKrb5Path = Utils.setupLocalResource(fs, appId.toString(), krb5ConfPath, krb5ConfResource, shipFilePath);
 				localResources.put(Utils.KRB5_FILE_NAME, krb5ConfResource);
 
 				File f = new File(System.getenv("YARN_CONF_DIR"),Utils.YARN_SITE_FILE_NAME);
 				LOG.info("Adding Yarn configuration {} to the AM container local resource bucket", f.getAbsolutePath());
 				LocalResource yarnConfResource = Records.newRecord(LocalResource.class);
 				Path yarnSitePath = new Path(f.getAbsolutePath());
-				remoteYarnSiteXmlPath = Utils.setupLocalResource(fs, appId.toString(), yarnSitePath, yarnConfResource, fs.getHomeDirectory());
+				remoteYarnSiteXmlPath = Utils.setupLocalResource(fs, appId.toString(), yarnSitePath, yarnConfResource, shipFilePath);
 				localResources.put(Utils.YARN_SITE_FILE_NAME, yarnConfResource);
 
 				hasKrb5 = true;
@@ -792,7 +800,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 			LOG.info("Adding keytab {} to the AM container local resource bucket", keytab);
 			keytabResource = Records.newRecord(LocalResource.class);
 			Path keytabPath = new Path(keytab);
-			remotePathKeytab = Utils.setupLocalResource(fs, appId.toString(), keytabPath, keytabResource, fs.getHomeDirectory());
+			remotePathKeytab = Utils.setupLocalResource(fs, appId.toString(), keytabPath, keytabResource, shipFilePath);
 			localResources.put(Utils.KEYTAB_FILE_NAME, keytabResource);
 		}
 
@@ -819,7 +827,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		appMasterEnv.put(YarnConfigKeys.ENV_TM_MEMORY, String.valueOf(taskManagerMemoryMb));
 		appMasterEnv.put(YarnConfigKeys.FLINK_JAR_PATH, remotePathJar.toString() );
 		appMasterEnv.put(YarnConfigKeys.ENV_APP_ID, appId.toString());
-		appMasterEnv.put(YarnConfigKeys.ENV_CLIENT_HOME_DIR, fs.getHomeDirectory().toString());
+		appMasterEnv.put(YarnConfigKeys.ENV_CLIENT_HOME_DIR, shipFilePath.toString());
 		appMasterEnv.put(YarnConfigKeys.ENV_CLIENT_SHIP_FILES, envShipFileList.toString());
 		appMasterEnv.put(YarnConfigKeys.ENV_SLOTS, String.valueOf(slots));
 		appMasterEnv.put(YarnConfigKeys.ENV_DETACHED, String.valueOf(detached));
@@ -934,10 +942,11 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		return report;
 	}
 	
-	private static List<String> uploadAndRegisterFiles(
+	private List<String> uploadAndRegisterFiles(
 			Collection<File> shipFiles,
 			FileSystem fs,
 			String appId,
+			Path shipFilePath,
 			List<Path> remotePaths,
 			Map<String, LocalResource> localResources,
 			StringBuilder envShipFileList) throws IOException {
@@ -947,7 +956,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 
 			Path shipLocalPath = new Path("file://" + shipFile.getAbsolutePath());
 			Path remotePath =
-				Utils.setupLocalResource(fs, appId, shipLocalPath, shipResources, fs.getHomeDirectory());
+				Utils.setupLocalResource(fs, appId, shipLocalPath, shipResources, shipFilePath);
 
 			remotePaths.add(remotePath);
 
@@ -1372,4 +1381,3 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 			perJobCluster);
 	}
 }
-
