@@ -105,6 +105,7 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 	private final Option SLOTS;
 	private final Option DETACHED;
 	private final Option ZOOKEEPER_NAMESPACE;
+	private final Option YARN_RESOURCE_SHIP_PATH;
 
 	/**
 	 * @deprecated Streaming mode has been deprecated without replacement. Set the
@@ -150,6 +151,7 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 		STREAMING = new Option(shortPrefix + "st", longPrefix + "streaming", false, "Start Flink in streaming mode");
 		NAME = new Option(shortPrefix + "nm", longPrefix + "name", true, "Set a custom name for the application on YARN");
 		ZOOKEEPER_NAMESPACE = new Option(shortPrefix + "z", longPrefix + "zookeeperNamespace", true, "Namespace to create the Zookeeper sub-paths for high availability mode");
+		YARN_RESOURCE_SHIP_PATH = new Option(shortPrefix + "yp", longPrefix + "yarnResourceShipPath", true, "The base directory for YARN cluster execution");
 
 		ALL_OPTIONS = new Options();
 		ALL_OPTIONS.addOption(FLINK_JAR);
@@ -166,6 +168,7 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 		ALL_OPTIONS.addOption(NAME);
 		ALL_OPTIONS.addOption(APPLICATION_ID);
 		ALL_OPTIONS.addOption(ZOOKEEPER_NAMESPACE);
+		ALL_OPTIONS.addOption(YARN_RESOURCE_SHIP_PATH);
 	}
 
 
@@ -350,6 +353,11 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 		if (cmd.hasOption(ZOOKEEPER_NAMESPACE.getOpt())) {
 			String zookeeperNamespace = cmd.getOptionValue(ZOOKEEPER_NAMESPACE.getOpt());
 			yarnClusterDescriptor.setZookeeperNamespace(zookeeperNamespace);
+		}
+
+		if (cmd.hasOption(YARN_RESOURCE_SHIP_PATH.getOpt())) {
+			String yarnResourceShipPath = cmd.getOptionValue(YARN_RESOURCE_SHIP_PATH.getOpt());
+			yarnClusterDescriptor.setYarnResourceShipPath(yarnResourceShipPath);
 		}
 
 		// ----- Convenience -----

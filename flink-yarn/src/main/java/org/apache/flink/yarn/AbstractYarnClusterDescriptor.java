@@ -139,6 +139,8 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 
 	private String zookeeperNamespace;
 
+	private String yarnResourceShipPath;
+
 	/** Optional Jar file to include in the system class loader of all application nodes
 	 * (for per-job submission) */
 	private final Set<File> userJarFiles = new HashSet<>();
@@ -286,7 +288,10 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 	}
 
 	public Path getResourceShipPath(FileSystem fs) {
-		String shipFileDir = flinkConfiguration.getString(ConfigConstants.YARN_RESOURCE_SHIP_PATH, null);
+		String shipFileDir = getYarnResourceShipPath();
+		if (shipFileDir == null) {
+			shipFileDir = flinkConfiguration.getString(ConfigConstants.YARN_RESOURCE_SHIP_PATH, null);
+		}
 		return shipFileDir != null ? new Path(shipFileDir) : fs.getHomeDirectory();
 	}
 
@@ -374,6 +379,14 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 
 	public void setZookeeperNamespace(String zookeeperNamespace) {
 		this.zookeeperNamespace = zookeeperNamespace;
+	}
+
+	public String getYarnResourceShipPath() {
+		return yarnResourceShipPath;
+	}
+
+	public void setYarnResourceShipPath(String yarnResourceShipPath) {
+		this.yarnResourceShipPath = yarnResourceShipPath;
 	}
 
 	/**
